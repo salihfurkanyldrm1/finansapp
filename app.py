@@ -1,4 +1,7 @@
 import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, db
 import tempfile
@@ -9,7 +12,10 @@ import tempfile
 if not firebase_admin._apps:
     firebase_json = st.secrets["firebase"]["key"]
 
-    # JSON içeriğini düzgün yazmak için geçici dosya
+    # Satır sonlarını düzelt (🔥 en kritik kısım)
+    firebase_json = firebase_json.replace("\\n", "\n")
+
+    # JSON içeriğini geçici dosyaya yaz
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
         f.write(firebase_json)
         f.flush()
@@ -43,16 +49,14 @@ df = pd.DataFrame(veri) if veri else pd.DataFrame(columns=["Tarih", "Tür", "Kat
 # =============================
 st.header("📝 Yeni Kayıt Ekle")
 
-# 🔘 Gelir / Gider seçimi
 tur = st.radio("Tür seçin:", ["Gelir", "Gider"], horizontal=True)
 
-# Kategori ve Gider Türü conditional
 if tur == "Gelir":
     kategori = st.selectbox("Kategori seçin:", ["Maaş", "Ek Gelir", "Yatırım", "Diğer"])
-    gider_turu = "-"  # Gelir için görünmez
+    gider_turu = "-"
 else:
     kategori = st.selectbox("Kategori seçin:", ["Market", "Fatura", "Kişisel Bakım", "Ulaşım", "Eğitim", "Sağlık", "Cafe/Restaurant", "Diğer"])
-    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])  # sadece giderde görünsün
+    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])
 
 tutar = st.number_input("Tutar (₺)", min_value=0.0, step=10.0)
 
@@ -73,7 +77,7 @@ if st.button("💾 Kaydı Ekle"):
 # =============================
 # 📋 Kayıtları Göster
 # =============================
-st.header("📊 Kayıtlar")
+st.header("📋 Kayıtlar")
 if not df.empty:
     st.dataframe(df)
 else:
@@ -97,12 +101,12 @@ if not df.empty:
 st.header("📈 Anlık Finans Analizi")
 if not df.empty:
     df["Tutar"] = pd.to_numeric(df["Tutar"], errors="coerce").fillna(0)
-    toplam_gelir = df[df["Tür"]=="Gelir"]["Tutar"].sum()
-    toplam_gider = df[df["Tür"]=="Gider"]["Tutar"].sum()
+    toplam_gelir = df[df["Tür"] == "Gelir"]["Tutar"].sum()
+    toplam_gider = df[df["Tür"] == "Gider"]["Tutar"].sum()
     bakiye = toplam_gelir - toplam_gider
 
-    zorunlu_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="Zorunlu")]["Tutar"].sum()
-    keyfi_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="Keyfi")]["Tutar"].sum()
+    zorunlu_gider = df[(df["Tür"] == "Gider") & (df["Gider Türü"] == "Zorunlu")]["Tutar"].sum()
+    keyfi_gider = df[(df["Tür"] == "Gider") & (df["Gider Türü"] == "Keyfi")]["Tutar"].sum()
 
     st.metric("Toplam Gelir", f"{toplam_gelir:.2f} ₺")
     st.metric("Toplam Gider", f"{toplam_gider:.2f} ₺")
@@ -110,15 +114,14 @@ if not df.empty:
 
     st.write("Zorunlu ve Keyfi Gider Dağılımı:")
     gider_turleri = {"Zorunlu": zorunlu_gider, "Keyfi": keyfi_gider}
-    plt.figure(figsize=(5,5))
+    plt.figure(figsize=(5, 5))
     plt.pie(gider_turleri.values(), labels=gider_turleri.keys(), autopct="%1.1f%%")
     st.pyplot(plt)
 
-    # Son 30 günlük gelir/gider grafiği
     df["Tarih"] = pd.to_datetime(df["Tarih"])
     son_30gun = datetime.now() - timedelta(days=30)
     son_kayitlar = df[df["Tarih"] >= son_30gun]
-    gunluk_toplam = son_kayitlar.groupby(["Tarih","Tür"])["Tutar"].sum().unstack().fillna(0)
+    gunluk_toplam = son_kayitlar.groupby(["Tarih", "Tür"])["Tutar"].sum().unstack().fillna(0)
     st.write("Son 30 Günlük Gelir/Gider Grafiği:")
     st.line_chart(gunluk_toplam)
 else:
