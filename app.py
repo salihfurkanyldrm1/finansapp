@@ -1,30 +1,23 @@
 import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, db
-import json
+import tempfile
 
 # =============================
-# 🔧 Firebase Bağlantısı (sadece bir kez initialize)
+# 🔧 Firebase Bağlantısı
 # =============================
 if not firebase_admin._apps:
-    # Streamlit Secrets'tan Firebase anahtarını oku
-    import tempfile
-import json
+    firebase_json = st.secrets["firebase"]["key"]
 
-# Firebase key'i geçici bir dosyaya yaz
-cred_dict = json.loads(st.secrets["firebase"]["key"])
-with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp:
-    json.dump(cred_dict, temp)
-    temp.flush()
-    cred = credentials.Certificate(temp.name)
+    # JSON içeriğini düzgün yazmak için geçici dosya
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
+        f.write(firebase_json)
+        f.flush()
+        cred = credentials.Certificate(f.name)
 
-# Firebase bağlantısı
-firebase_admin.initialize_app(cred, {
-    "databaseURL": "https://finansapp-47c29-default-rtdb.europe-west1.firebasedatabase.app/"
-})
+    firebase_admin.initialize_app(cred, {
+        "databaseURL": "https://finansapp-47c29-default-rtdb.europe-west1.firebasedatabase.app/"
+    })
 
 # =============================
 # 🧑‍💻 Kullanıcı Girişi
