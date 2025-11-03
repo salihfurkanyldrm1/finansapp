@@ -27,25 +27,20 @@ if not firebase_admin._apps:
 # 🔐 Basit Kullanıcı Doğrulama Yardımcıları
 # =============================
 def hash_password(password: str, username: str) -> str:
-    """Basit (demo) hash: sha256(password + username). Username ile bağlamak için."""
     return hashlib.sha256((password + username).encode("utf-8")).hexdigest()
 
 def get_cred_ref(username: str):
-    """Kullanıcı kimlik bilgilerinin saklandığı ref yolu."""
     return db.reference(f"kullanici_creds/{username}")
 
 def signup_user(username: str, password: str) -> (bool, str):
-    """Yeni kullanıcı oluştur. Döner: (başarılı mı, mesaj)"""
     cred_ref = get_cred_ref(username)
     if cred_ref.get() is not None:
         return False, "Bu kullanıcı adı zaten alınmış. Farklı bir kullanıcı adı seçin."
     hashed = hash_password(password, username)
-    # Basit obje: sadece hash saklanıyor. İleride email, created_at vs. ekleyebilirsin.
     cred_ref.set({"password_hash": hashed, "created_at": datetime.now().isoformat()})
     return True, "Hesap başarıyla oluşturuldu. Giriş yapabilirsiniz."
 
 def signin_user(username: str, password: str) -> (bool, str):
-    """Giriş doğrulaması. Döner: (başarılı mı, mesaj)"""
     cred_ref = get_cred_ref(username)
     data = cred_ref.get()
     if data is None:
@@ -56,7 +51,7 @@ def signin_user(username: str, password: str) -> (bool, str):
     return True, "Giriş başarılı."
 
 # =============================
-# 🧾 Oturum Yönetimi (session_state)
+# 🧾 Oturum Yönetimi
 # =============================
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -81,7 +76,7 @@ if not st.session_state["logged_in"]:
 
     signup_checkbox = st.checkbox("Yeni hesap oluşturmak istiyorum", key="signup_option")
 
-    if st.button("Giriş") or st.button("Tamamla"):  # buton isimleri streamlit'de iken çakışabilir, ama her ikisini de kontrol edelim
+    if st.button("Giriş") or st.button("Tamamla"):
         if not kullanici_input or not sifre_input:
             st.warning("Kullanıcı adı ve şifre girin.")
         else:
@@ -90,7 +85,6 @@ if not st.session_state["logged_in"]:
                 st.session_state["auth_message"] = msg
                 if ok:
                     st.success(msg)
-                    # otomatik giriş yaptır
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = kullanici_input.strip()
                     st.experimental_rerun()
@@ -110,7 +104,7 @@ if not st.session_state["logged_in"]:
     if st.session_state["auth_message"]:
         st.info(st.session_state["auth_message"])
 
-    st.stop()  # Giriş yapılmamışsa uygulamanın geri kalanını göstermiyoruz
+    st.stop()
 
 # =============================
 # Oturum açılmış: devam
@@ -123,7 +117,7 @@ if st.sidebar.button("Çıkış Yap"):
     st.experimental_rerun()
 
 # =============================
-# 🔁 Kullanıcı verisi referansı (aynı mantık)
+# 🔁 Kullanıcı verisi referansı
 # =============================
 user_ref = db.reference(f"kullanicilar/{kullanici}")
 
@@ -134,7 +128,7 @@ veri = user_ref.get()
 df = pd.DataFrame(veri) if veri else pd.DataFrame(columns=["Tarih", "Tür", "Kategori", "Tutar", "Gider Türü"])
 
 # =============================
-# 📝 Yeni Kayıt Ekleme (mantık aynı)
+# 📝 Yeni Kayıt Ekleme
 # =============================
 st.header("📝 Yeni Kayıt Ekle")
 
@@ -142,7 +136,7 @@ tur = st.radio("Tür seçin:", ["Gelir", "Gider"], horizontal=True)
 
 if tur == "Gelir":
     kategori = st.selectbox("Kategori seçin:", ["Maaş", "Ek Gelir", "Yatırım", "Diğer"])
-    gider_turu = "-"  # Gelir için görünmez
+    gider_turu = "-"
 else:
     kategori = st.selectbox("Kategori seçin:", ["Market", "Fatura", "Kişisel Bakım","Kredi","Ulaşım", "Eğitim", "Sağlık", "Cafe/Restaurant", "Diğer"])
     gider_turu = st.radio("Gider türü seçin:", ["İhtiyaç", "İstek"])
@@ -194,15 +188,16 @@ if not df.empty:
     toplam_gider = df[df["Tür"]=="Gider"]["Tutar"].sum()
     bakiye = toplam_gelir - toplam_gider
 
-    zorunlu_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İhtiyaç")]["Tutar"].sum()
-    keyfi_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İstek")]["Tutar"].sum()
+    # Düzeltilmiş değişken isimleri
+    İhtiyaç_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İhtiyaç")]["Tutar"].sum()
+    İstek_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İstek")]["Tutar"].sum()
 
     st.metric("Toplam Gelir", f"{toplam_gelir:.2f} ₺")
     st.metric("Toplam Gider", f"{toplam_gider:.2f} ₺")
     st.metric("Kalan Bakiye", f"{bakiye:.2f} ₺")
 
     st.write("İhtiyaç ve İstek Gider Dağılımı:")
-    gider_turleri = {"İhtiyaç": İhtiyaç_gider, "İstek": istek_gider}
+    gider_turleri = {"İhtiyaç": İhtiyaç_gider, "İstek": İstek_gider}
 
     if toplam_gider > 0:
         plt.figure(figsize=(5,5))
