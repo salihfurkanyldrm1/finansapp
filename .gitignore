@@ -1,0 +1,24 @@
+# Python cache ve derlenmiş dosyalar
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Sanal ortamlar
+env/
+venv/
+.venv/
+
+# Firebase anahtar dosyası (gizli bilgi)
+firebase_key.json
+
+# IDE / Editor ayarları
+.vscode/
+.idea/
+
+# Streamlit secrets (lokalde test için)
+.secrets.toml
+
+# Sistem dosyaları
+.DS_Store
+Thumbs.db
