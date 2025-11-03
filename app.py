@@ -5,9 +5,10 @@ from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, db
 import tempfile
+import hashlib
 
 # =============================
-# 🔧 Firebase Bağlantısı
+# 🔧 Firebase Bağlantısı (aynı kaldı)
 # =============================
 if not firebase_admin._apps:
     firebase_json = st.secrets["firebase"]["key"]
@@ -23,16 +24,107 @@ if not firebase_admin._apps:
     })
 
 # =============================
-# 🧑‍💻 Kullanıcı Girişi
+# 🔐 Basit Kullanıcı Doğrulama Yardımcıları
+# =============================
+def hash_password(password: str, username: str) -> str:
+    """Basit (demo) hash: sha256(password + username). Username ile bağlamak için."""
+    return hashlib.sha256((password + username).encode("utf-8")).hexdigest()
+
+def get_cred_ref(username: str):
+    """Kullanıcı kimlik bilgilerinin saklandığı ref yolu."""
+    return db.reference(f"kullanici_creds/{username}")
+
+def signup_user(username: str, password: str) -> (bool, str):
+    """Yeni kullanıcı oluştur. Döner: (başarılı mı, mesaj)"""
+    cred_ref = get_cred_ref(username)
+    if cred_ref.get() is not None:
+        return False, "Bu kullanıcı adı zaten alınmış. Farklı bir kullanıcı adı seçin."
+    hashed = hash_password(password, username)
+    # Basit obje: sadece hash saklanıyor. İleride email, created_at vs. ekleyebilirsin.
+    cred_ref.set({"password_hash": hashed, "created_at": datetime.now().isoformat()})
+    return True, "Hesap başarıyla oluşturuldu. Giriş yapabilirsiniz."
+
+def signin_user(username: str, password: str) -> (bool, str):
+    """Giriş doğrulaması. Döner: (başarılı mı, mesaj)"""
+    cred_ref = get_cred_ref(username)
+    data = cred_ref.get()
+    if data is None:
+        return False, "Kullanıcı bulunamadı. Önce kayıt olun."
+    hashed = hash_password(password, username)
+    if hashed != data.get("password_hash"):
+        return False, "Şifre hatalı."
+    return True, "Giriş başarılı."
+
+# =============================
+# 🧾 Oturum Yönetimi (session_state)
+# =============================
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+if "user" not in st.session_state:
+    st.session_state["user"] = None
+if "auth_message" not in st.session_state:
+    st.session_state["auth_message"] = ""
+
+# =============================
+# 🔐 Giriş / Kayıt Arayüzü
 # =============================
 st.title("💸 Kişisel Finans Takip Uygulaması")
 st.write("Her kullanıcı kendi verilerini görür, tüm kayıtlar bulutta saklanır ☁️")
 
-kullanici = st.text_input("Kullanıcı adını gir:", placeholder="örnek: salih123")
-if not kullanici:
-    st.warning("Devam etmek için bir kullanıcı adı gir.")
-    st.stop()
+if not st.session_state["logged_in"]:
+    st.subheader("Giriş Yap / Kayıt Ol")
+    col1, col2 = st.columns(2)
+    with col1:
+        kullanici_input = st.text_input("Kullanıcı adı:", key="login_user")
+    with col2:
+        sifre_input = st.text_input("Şifre:", type="password", key="login_pass")
 
+    signup_checkbox = st.checkbox("Yeni hesap oluşturmak istiyorum", key="signup_option")
+
+    if st.button("Giriş") or st.button("Tamamla"):  # buton isimleri streamlit'de iken çakışabilir, ama her ikisini de kontrol edelim
+        if not kullanici_input or not sifre_input:
+            st.warning("Kullanıcı adı ve şifre girin.")
+        else:
+            if signup_checkbox:
+                ok, msg = signup_user(kullanici_input.strip(), sifre_input)
+                st.session_state["auth_message"] = msg
+                if ok:
+                    st.success(msg)
+                    # otomatik giriş yaptır
+                    st.session_state["logged_in"] = True
+                    st.session_state["user"] = kullanici_input.strip()
+                    st.experimental_rerun()
+                else:
+                    st.error(msg)
+            else:
+                ok, msg = signin_user(kullanici_input.strip(), sifre_input)
+                st.session_state["auth_message"] = msg
+                if ok:
+                    st.success(msg)
+                    st.session_state["logged_in"] = True
+                    st.session_state["user"] = kullanici_input.strip()
+                    st.experimental_rerun()
+                else:
+                    st.error(msg)
+
+    if st.session_state["auth_message"]:
+        st.info(st.session_state["auth_message"])
+
+    st.stop()  # Giriş yapılmamışsa uygulamanın geri kalanını göstermiyoruz
+
+# =============================
+# Oturum açılmış: devam
+# =============================
+kullanici = st.session_state["user"]
+st.sidebar.markdown(f"**Giriş yapan:** {kullanici}")
+if st.sidebar.button("Çıkış Yap"):
+    st.session_state["logged_in"] = False
+    st.session_state["user"] = None
+    st.experimental_rerun()
+
+# =============================
+# 🔁 Kullanıcı verisi referansı (aynı mantık)
+# =============================
 user_ref = db.reference(f"kullanicilar/{kullanici}")
 
 # =============================
@@ -42,20 +134,18 @@ veri = user_ref.get()
 df = pd.DataFrame(veri) if veri else pd.DataFrame(columns=["Tarih", "Tür", "Kategori", "Tutar", "Gider Türü"])
 
 # =============================
-# 📝 Yeni Kayıt Ekleme
+# 📝 Yeni Kayıt Ekleme (mantık aynı)
 # =============================
 st.header("📝 Yeni Kayıt Ekle")
 
-# 🔘 Gelir / Gider seçimi
 tur = st.radio("Tür seçin:", ["Gelir", "Gider"], horizontal=True)
 
-# Kategori ve Gider Türü conditional
 if tur == "Gelir":
     kategori = st.selectbox("Kategori seçin:", ["Maaş", "Ek Gelir", "Yatırım", "Diğer"])
     gider_turu = "-"  # Gelir için görünmez
 else:
     kategori = st.selectbox("Kategori seçin:", ["Market", "Fatura", "Kişisel Bakım", "Ulaşım", "Eğitim", "Sağlık", "Cafe/Restaurant", "Diğer"])
-    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])  # sadece giderde görünsün
+    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])
 
 tutar = st.number_input("Tutar (₺)", min_value=0.0, step=10.0)
 
@@ -118,6 +208,7 @@ if not df.empty:
         plt.figure(figsize=(5,5))
         plt.pie(gider_turleri.values(), labels=gider_turleri.keys(), autopct="%1.1f%%")
         st.pyplot(plt)
+        plt.close()
     else:
         st.info("Henüz gider kaydı yok. Pie chart için veri bekleniyor.")
 
