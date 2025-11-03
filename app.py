@@ -23,26 +23,14 @@ if not firebase_admin._apps:
     })
 
 # =============================
-# 🧑‍💻 Kullanıcı Girişi (Kullanıcı adı + şifre)
+# 🧑‍💻 Kullanıcı Girişi
 # =============================
 st.title("💸 Kişisel Finans Takip Uygulaması")
 st.write("Her kullanıcı kendi verilerini görür, tüm kayıtlar bulutta saklanır ☁️")
 
-# Kullanıcılar ve şifreler secrets.toml'da dictionary olarak olmalı
-# Örnek secrets.toml:
-# [users]
-# salih123 = "1234"
-users = st.secrets["users"]
-
 kullanici = st.text_input("Kullanıcı adını gir:", placeholder="örnek: salih123")
-sifre = st.text_input("Şifre:", type="password")
-
-if not kullanici or not sifre:
-    st.warning("Devam etmek için kullanıcı adı ve şifre girin.")
-    st.stop()
-
-if kullanici not in users or users[kullanici] != sifre:
-    st.error("Kullanıcı adı veya şifre yanlış!")
+if not kullanici:
+    st.warning("Devam etmek için bir kullanıcı adı gir.")
     st.stop()
 
 user_ref = db.reference(f"kullanicilar/{kullanici}")
@@ -58,14 +46,16 @@ df = pd.DataFrame(veri) if veri else pd.DataFrame(columns=["Tarih", "Tür", "Kat
 # =============================
 st.header("📝 Yeni Kayıt Ekle")
 
+# 🔘 Gelir / Gider seçimi
 tur = st.radio("Tür seçin:", ["Gelir", "Gider"], horizontal=True)
 
+# Kategori ve Gider Türü conditional
 if tur == "Gelir":
     kategori = st.selectbox("Kategori seçin:", ["Maaş", "Ek Gelir", "Yatırım", "Diğer"])
-    gider_turu = "-"
+    gider_turu = "-"  # Gelir için görünmez
 else:
     kategori = st.selectbox("Kategori seçin:", ["Market", "Fatura", "Kişisel Bakım", "Ulaşım", "Eğitim", "Sağlık", "Cafe/Restaurant", "Diğer"])
-    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])
+    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])  # sadece giderde görünsün
 
 tutar = st.number_input("Tutar (₺)", min_value=0.0, step=10.0)
 
@@ -81,7 +71,7 @@ if st.button("💾 Kaydı Ekle"):
     kayitlar.append(yeni_kayit)
     user_ref.set(kayitlar)
     st.success("✅ Kayıt başarıyla eklendi!")
-    st.experimental_rerun()
+    st.rerun()
 
 # =============================
 # 📋 Kayıtları Göster
@@ -102,7 +92,7 @@ if not df.empty:
         df = df.drop(secilen_index).reset_index(drop=True)
         user_ref.set(df.to_dict(orient="records"))
         st.success("🧹 Kayıt başarıyla silindi!")
-        st.experimental_rerun()
+        st.rerun()
 
 # =============================
 # 📈 Anlık Analiz
@@ -131,6 +121,7 @@ if not df.empty:
     else:
         st.info("Henüz gider kaydı yok. Pie chart için veri bekleniyor.")
 
+    # Son 30 günlük gelir/gider grafiği
     df["Tarih"] = pd.to_datetime(df["Tarih"])
     son_30gun = datetime.now() - timedelta(days=30)
     son_kayitlar = df[df["Tarih"] >= son_30gun]
