@@ -5,14 +5,17 @@ from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, db
 import tempfile
+import json
+import hashlib
+import re
 
 # =============================
-# 🔧 Firebase Bağlantısı
+# 🔧 Firebase Bağlantısı (secrets ile)
 # =============================
 if not firebase_admin._apps:
     firebase_json = st.secrets["firebase"]["key"]
-
-    # JSON içeriğini geçici dosyaya yaz
+    # Eğer secrets'ta \\n gibi kaçışlar varsa düzelt:
+    firebase_json = firebase_json.replace("\\n", "\n")
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
         f.write(firebase_json)
         f.flush()
@@ -23,16 +26,62 @@ if not firebase_admin._apps:
     })
 
 # =============================
-# 🧑‍💻 Kullanıcı Girişi
+# 👥 Basit kullanıcı adı + şifre auth (sidebar)
 # =============================
-st.title("💸 Kişisel Finans Takip Uygulaması")
-st.write("Her kullanıcı kendi verilerini görür, tüm kayıtlar bulutta saklanır ☁️")
+def sanitize_username(u: str) -> str:
+    # DB key olarak güvenli hale getir: boşlukları ve nokta gibi karakterleri alt çizgiye çevir
+    u = u.strip()
+    u = re.sub(r"[^\w\-]", "_", u)  # sadece harf/ sayı / altçizgi / tire bırak
+    return u
 
-kullanici = st.text_input("Kullanıcı adını gir:", placeholder="örnek: salih123")
-if not kullanici:
-    st.warning("Devam etmek için bir kullanıcı adı gir.")
+if "user" not in st.session_state:
+    st.session_state["user"] = None
+
+with st.sidebar:
+    st.header("Giriş / Kayıt")
+    mode = st.radio("İşlem:", ["Giriş Yap", "Kayıt Ol"])
+    input_username = st.text_input("Kullanıcı adı", placeholder="örnek: salih123")
+    input_password = st.text_input("Şifre", type="password")
+    if st.button("Devam"):
+        if not input_username or not input_password:
+            st.warning("Kullanıcı adı ve şifre girin.")
+        else:
+            username_key = sanitize_username(input_username)
+            auth_ref = db.reference(f"auth/{username_key}")
+            stored = auth_ref.get()
+            hashed = hashlib.sha256(input_password.encode("utf-8")).hexdigest()
+
+            if mode == "Kayıt Ol":
+                if stored:
+                    st.error("Bu kullanıcı adı zaten alınmış. Başka bir isim deneyin.")
+                else:
+                    # Yeni kullanıcı oluştur
+                    auth_ref.set({"password": hashed})
+                    st.success("Kayıt başarılı — giriş yapabilirsiniz.")
+            else:  # Giriş Yap
+                if not stored:
+                    st.error("Böyle bir kullanıcı bulunamadı. Kayıt olun.")
+                elif stored.get("password") != hashed:
+                    st.error("Şifre hatalı.")
+                else:
+                    st.success("Giriş başarılı! Hoş geldin, " + input_username)
+                    st.session_state["user"] = username_key
+
+    if st.session_state["user"]:
+        st.write(f"**Girişli:** {st.session_state['user']}")
+        if st.button("Çıkış Yap"):
+            st.session_state["user"] = None
+            st.experimental_rerun()
+    st.markdown("---")
+    st.caption("Not: Kullanıcı adı yalnızca harf/sayı/_/- içerebilir; nokta/boşluklar '_' ile değiştirilecektir.")
+
+# Eğer kullanıcı henüz giriş yapmadıysa ana UI'yi gösterme
+if not st.session_state["user"]:
+    st.info("Devam etmek için sidebar'dan giriş yapın veya kayıt olun.")
     st.stop()
 
+# >= buradan itibaren kullanıcı girişli
+kullanici = st.session_state["user"]
 user_ref = db.reference(f"kullanicilar/{kullanici}")
 
 # =============================
@@ -44,18 +93,18 @@ df = pd.DataFrame(veri) if veri else pd.DataFrame(columns=["Tarih", "Tür", "Kat
 # =============================
 # 📝 Yeni Kayıt Ekleme
 # =============================
-st.header("📝 Yeni Kayıt Ekle")
+st.title("💸 Kişisel Finans Takip Uygulaması")
+st.write(f"Girişli kullanıcı: **{kullanici}**")
 
-# 🔘 Gelir / Gider seçimi
+st.header("📝 Yeni Kayıt Ekle")
 tur = st.radio("Tür seçin:", ["Gelir", "Gider"], horizontal=True)
 
-# Kategori ve Gider Türü conditional
 if tur == "Gelir":
     kategori = st.selectbox("Kategori seçin:", ["Maaş", "Ek Gelir", "Yatırım", "Diğer"])
-    gider_turu = "-"  # Gelir için görünmez
+    gider_turu = "-" 
 else:
     kategori = st.selectbox("Kategori seçin:", ["Market", "Fatura", "Kişisel Bakım", "Ulaşım", "Eğitim", "Sağlık", "Cafe/Restaurant", "Diğer"])
-    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])  # sadece giderde görünsün
+    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])
 
 tutar = st.number_input("Tutar (₺)", min_value=0.0, step=10.0)
 
@@ -71,7 +120,7 @@ if st.button("💾 Kaydı Ekle"):
     kayitlar.append(yeni_kayit)
     user_ref.set(kayitlar)
     st.success("✅ Kayıt başarıyla eklendi!")
-    st.rerun()
+    st.experimental_rerun()
 
 # =============================
 # 📋 Kayıtları Göster
@@ -92,7 +141,7 @@ if not df.empty:
         df = df.drop(secilen_index).reset_index(drop=True)
         user_ref.set(df.to_dict(orient="records"))
         st.success("🧹 Kayıt başarıyla silindi!")
-        st.rerun()
+        st.experimental_rerun()
 
 # =============================
 # 📈 Anlık Analiz
@@ -111,10 +160,9 @@ if not df.empty:
     st.metric("Toplam Gider", f"{toplam_gider:.2f} ₺")
     st.metric("Kalan Bakiye", f"{bakiye:.2f} ₺")
 
-    st.write("Zorunlu ve Keyfi Gider Dağılımı:")
-    gider_turleri = {"Zorunlu": zorunlu_gider, "Keyfi": keyfi_gider}
-
+    # Pie chart sadece gider varsa göster
     if toplam_gider > 0:
+        gider_turleri = {"Zorunlu": zorunlu_gider, "Keyfi": keyfi_gider}
         plt.figure(figsize=(5,5))
         plt.pie(gider_turleri.values(), labels=gider_turleri.keys(), autopct="%1.1f%%")
         st.pyplot(plt)
@@ -125,8 +173,11 @@ if not df.empty:
     df["Tarih"] = pd.to_datetime(df["Tarih"])
     son_30gun = datetime.now() - timedelta(days=30)
     son_kayitlar = df[df["Tarih"] >= son_30gun]
-    gunluk_toplam = son_kayitlar.groupby(["Tarih","Tür"])["Tutar"].sum().unstack().fillna(0)
-    st.write("Son 30 Günlük Gelir/Gider Grafiği:")
-    st.line_chart(gunluk_toplam)
+    if not son_kayitlar.empty:
+        gunluk_toplam = son_kayitlar.groupby(["Tarih","Tür"])["Tutar"].sum().unstack().fillna(0)
+        st.write("Son 30 Günlük Gelir/Gider Grafiği:")
+        st.line_chart(gunluk_toplam)
+    else:
+        st.info("Son 30 gün için yeterli veri yok.")
 else:
     st.info("Analiz için yeterli veri bulunamadı.")
