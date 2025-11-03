@@ -11,11 +11,20 @@ import json
 # =============================
 if not firebase_admin._apps:
     # Streamlit Secrets'tan Firebase anahtarını oku
-    cred_dict = json.loads(st.secrets["firebase"]["key"])
-    cred = credentials.Certificate(cred_dict)
-    firebase_admin.initialize_app(cred, {
-        "databaseURL": "https://finansapp-47c29-default-rtdb.europe-west1.firebasedatabase.app/"
-    })
+    import tempfile
+import json
+
+# Firebase key'i geçici bir dosyaya yaz
+cred_dict = json.loads(st.secrets["firebase"]["key"])
+with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp:
+    json.dump(cred_dict, temp)
+    temp.flush()
+    cred = credentials.Certificate(temp.name)
+
+# Firebase bağlantısı
+firebase_admin.initialize_app(cred, {
+    "databaseURL": "https://finansapp-47c29-default-rtdb.europe-west1.firebasedatabase.app/"
+})
 
 # =============================
 # 🧑‍💻 Kullanıcı Girişi
