@@ -12,7 +12,7 @@ import tempfile
 if not firebase_admin._apps:
     firebase_json = st.secrets["firebase"]["key"]
 
-    # JSON içeriğini geçici dosyaya yazıyoruz
+    # JSON içeriğini geçici dosyaya yaz
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
         f.write(firebase_json)
         f.flush()
@@ -46,14 +46,16 @@ df = pd.DataFrame(veri) if veri else pd.DataFrame(columns=["Tarih", "Tür", "Kat
 # =============================
 st.header("📝 Yeni Kayıt Ekle")
 
+# 🔘 Gelir / Gider seçimi
 tur = st.radio("Tür seçin:", ["Gelir", "Gider"], horizontal=True)
 
+# Kategori ve Gider Türü conditional
 if tur == "Gelir":
     kategori = st.selectbox("Kategori seçin:", ["Maaş", "Ek Gelir", "Yatırım", "Diğer"])
     gider_turu = "-"  # Gelir için görünmez
 else:
     kategori = st.selectbox("Kategori seçin:", ["Market", "Fatura", "Kişisel Bakım", "Ulaşım", "Eğitim", "Sağlık", "Cafe/Restaurant", "Diğer"])
-    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])
+    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])  # sadece giderde görünsün
 
 tutar = st.number_input("Tutar (₺)", min_value=0.0, step=10.0)
 
@@ -69,8 +71,7 @@ if st.button("💾 Kaydı Ekle"):
     kayitlar.append(yeni_kayit)
     user_ref.set(kayitlar)
     st.success("✅ Kayıt başarıyla eklendi!")
-    # Güvenli şekilde rerun
-    st.experimental_rerun()
+    st.rerun()
 
 # =============================
 # 📋 Kayıtları Göster
@@ -91,7 +92,7 @@ if not df.empty:
         df = df.drop(secilen_index).reset_index(drop=True)
         user_ref.set(df.to_dict(orient="records"))
         st.success("🧹 Kayıt başarıyla silindi!")
-        st.experimental_rerun()
+        st.rerun()
 
 # =============================
 # 📈 Anlık Analiz
@@ -103,31 +104,29 @@ if not df.empty:
     toplam_gider = df[df["Tür"]=="Gider"]["Tutar"].sum()
     bakiye = toplam_gelir - toplam_gider
 
+    zorunlu_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="Zorunlu")]["Tutar"].sum()
+    keyfi_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="Keyfi")]["Tutar"].sum()
+
     st.metric("Toplam Gelir", f"{toplam_gelir:.2f} ₺")
     st.metric("Toplam Gider", f"{toplam_gider:.2f} ₺")
     st.metric("Kalan Bakiye", f"{bakiye:.2f} ₺")
 
-    # Gider verisi varsa pie chart çiz
-    zorunlu_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="Zorunlu")]["Tutar"].sum()
-    keyfi_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="Keyfi")]["Tutar"].sum()
-    if zorunlu_gider + keyfi_gider > 0:
-        st.write("Zorunlu ve Keyfi Gider Dağılımı:")
-        gider_turleri = {"Zorunlu": zorunlu_gider, "Keyfi": keyfi_gider}
+    st.write("Zorunlu ve Keyfi Gider Dağılımı:")
+    gider_turleri = {"Zorunlu": zorunlu_gider, "Keyfi": keyfi_gider}
+
+    if toplam_gider > 0:
         plt.figure(figsize=(5,5))
         plt.pie(gider_turleri.values(), labels=gider_turleri.keys(), autopct="%1.1f%%")
         st.pyplot(plt)
     else:
-        st.info("Henüz gider verisi yok, grafik gösterilemiyor.")
+        st.info("Henüz gider kaydı yok. Pie chart için veri bekleniyor.")
 
     # Son 30 günlük gelir/gider grafiği
     df["Tarih"] = pd.to_datetime(df["Tarih"])
     son_30gun = datetime.now() - timedelta(days=30)
     son_kayitlar = df[df["Tarih"] >= son_30gun]
-    if not son_kayitlar.empty:
-        gunluk_toplam = son_kayitlar.groupby(["Tarih","Tür"])["Tutar"].sum().unstack().fillna(0)
-        st.write("Son 30 Günlük Gelir/Gider Grafiği:")
-        st.line_chart(gunluk_toplam)
-    else:
-        st.info("Son 30 gün için yeterli veri yok.")
+    gunluk_toplam = son_kayitlar.groupby(["Tarih","Tür"])["Tutar"].sum().unstack().fillna(0)
+    st.write("Son 30 Günlük Gelir/Gider Grafiği:")
+    st.line_chart(gunluk_toplam)
 else:
     st.info("Analiz için yeterli veri bulunamadı.")
