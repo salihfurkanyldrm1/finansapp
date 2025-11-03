@@ -5,19 +5,17 @@ from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, db
 import tempfile
+import json
 
 # =============================
 # 🔧 Firebase Bağlantısı
 # =============================
 if not firebase_admin._apps:
-    firebase_json = st.secrets["firebase"]["key"]
+    firebase_config = st.secrets["firebase"]  # secrets.toml'daki [firebase] kısmını al
 
-    # Satır sonlarını düzelt (🔥 en kritik kısım)
-    firebase_json = firebase_json.replace("\\n", "\n")
-
-    # JSON içeriğini geçici dosyaya yaz
+    # JSON içeriğini geçici bir dosyaya yaz
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-        f.write(firebase_json)
+        json.dump(dict(firebase_config), f)
         f.flush()
         cred = credentials.Certificate(f.name)
 
@@ -77,7 +75,7 @@ if st.button("💾 Kaydı Ekle"):
 # =============================
 # 📋 Kayıtları Göster
 # =============================
-st.header("📋 Kayıtlar")
+st.header("📊 Kayıtlar")
 if not df.empty:
     st.dataframe(df)
 else:
