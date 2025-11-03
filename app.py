@@ -4,12 +4,15 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, db
+import json
 
 # =============================
 # 🔧 Firebase Bağlantısı (sadece bir kez initialize)
 # =============================
 if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase_key.json")  # Senin Firebase key dosyan
+    # Streamlit Secrets'tan Firebase anahtarını oku
+    cred_dict = json.loads(st.secrets["firebase"]["key"])
+    cred = credentials.Certificate(cred_dict)
     firebase_admin.initialize_app(cred, {
         "databaseURL": "https://finansapp-47c29-default-rtdb.europe-west1.firebasedatabase.app/"
     })
