@@ -144,8 +144,8 @@ if tur == "Gelir":
     kategori = st.selectbox("Kategori seçin:", ["Maaş", "Ek Gelir", "Yatırım", "Diğer"])
     gider_turu = "-"  # Gelir için görünmez
 else:
-    kategori = st.selectbox("Kategori seçin:", ["Market", "Fatura", "Kişisel Bakım", "Ulaşım", "Eğitim", "Sağlık", "Cafe/Restaurant", "Diğer"])
-    gider_turu = st.radio("Gider türü seçin:", ["Zorunlu", "Keyfi"])
+    kategori = st.selectbox("Kategori seçin:", ["Market", "Fatura", "Kişisel Bakım","Kredi","Ulaşım", "Eğitim", "Sağlık", "Cafe/Restaurant", "Diğer"])
+    gider_turu = st.radio("Gider türü seçin:", ["İhtiyaç", "İstek"])
 
 tutar = st.number_input("Tutar (₺)", min_value=0.0, step=10.0)
 
@@ -194,15 +194,15 @@ if not df.empty:
     toplam_gider = df[df["Tür"]=="Gider"]["Tutar"].sum()
     bakiye = toplam_gelir - toplam_gider
 
-    zorunlu_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="Zorunlu")]["Tutar"].sum()
-    keyfi_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="Keyfi")]["Tutar"].sum()
+    zorunlu_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İhtiyaç")]["Tutar"].sum()
+    keyfi_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İstek")]["Tutar"].sum()
 
     st.metric("Toplam Gelir", f"{toplam_gelir:.2f} ₺")
     st.metric("Toplam Gider", f"{toplam_gider:.2f} ₺")
     st.metric("Kalan Bakiye", f"{bakiye:.2f} ₺")
 
-    st.write("Zorunlu ve Keyfi Gider Dağılımı:")
-    gider_turleri = {"Zorunlu": zorunlu_gider, "Keyfi": keyfi_gider}
+    st.write("İhtiyaç ve İstek Gider Dağılımı:")
+    gider_turleri = {"İhtiyaç": İhtiyaç_gider, "İstek": istek_gider}
 
     if toplam_gider > 0:
         plt.figure(figsize=(5,5))
