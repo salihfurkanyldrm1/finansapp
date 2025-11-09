@@ -6,16 +6,18 @@ import firebase_admin
 from firebase_admin import credentials, db
 import tempfile
 import hashlib
+import json
 
 # =============================
-# 🔧 Firebase Bağlantısı (aynı kaldı)
+# 🔧 Firebase Bağlantısı (TOML uyumlu hale getirildi)
 # =============================
 if not firebase_admin._apps:
-    firebase_json = st.secrets["firebase"]["key"]
+    # Firebase verisini dict olarak al
+    firebase_data = dict(st.secrets["firebase"])
 
-    # JSON içeriğini geçici dosyaya yaz
+    # JSON olarak geçici dosyaya yaz
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-        f.write(firebase_json)
+        json.dump(firebase_data, f)
         f.flush()
         cred = credentials.Certificate(f.name)
 
@@ -189,15 +191,15 @@ if not df.empty:
     bakiye = toplam_gelir - toplam_gider
 
     # Düzeltilmiş değişken isimleri
-    İhtiyaç_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İhtiyaç")]["Tutar"].sum()
-    İstek_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İstek")]["Tutar"].sum()
+    ihtiyac_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İhtiyaç")]["Tutar"].sum()
+    istek_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İstek")]["Tutar"].sum()
 
     st.metric("Toplam Gelir", f"{toplam_gelir:.2f} ₺")
     st.metric("Toplam Gider", f"{toplam_gider:.2f} ₺")
     st.metric("Kalan Bakiye", f"{bakiye:.2f} ₺")
 
     st.write("İhtiyaç ve İstek Gider Dağılımı:")
-    gider_turleri = {"İhtiyaç": İhtiyaç_gider, "İstek": İstek_gider}
+    gider_turleri = {"İhtiyaç": ihtiyac_gider, "İstek": istek_gider}
 
     if toplam_gider > 0:
         plt.figure(figsize=(5,5))
