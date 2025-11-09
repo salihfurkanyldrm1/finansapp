@@ -4,22 +4,16 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, db
-import tempfile
 import hashlib
 import json
 
 # =============================
-# 🔧 Firebase Bağlantısı (TOML uyumlu hale getirildi)
+# 🔧 Firebase Bağlantısı (Secrets ile)
 # =============================
 if not firebase_admin._apps:
-    # Firebase verisini dict olarak al
-    firebase_data = dict(st.secrets["firebase"])
-
-    # JSON olarak geçici dosyaya yaz
-    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-        json.dump(firebase_data, f)
-        f.flush()
-        cred = credentials.Certificate(f.name)
+    firebase_json = st.secrets["firebase"]["key"]
+    cred_dict = json.loads(firebase_json)  # JSON string'i dict'e çeviriyoruz
+    cred = credentials.Certificate(cred_dict)
 
     firebase_admin.initialize_app(cred, {
         "databaseURL": "https://finansapp-47c29-default-rtdb.europe-west1.firebasedatabase.app/"
@@ -190,16 +184,15 @@ if not df.empty:
     toplam_gider = df[df["Tür"]=="Gider"]["Tutar"].sum()
     bakiye = toplam_gelir - toplam_gider
 
-    # Düzeltilmiş değişken isimleri
-    ihtiyac_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İhtiyaç")]["Tutar"].sum()
-    istek_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İstek")]["Tutar"].sum()
+    İhtiyaç_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İhtiyaç")]["Tutar"].sum()
+    İstek_gider = df[(df["Tür"]=="Gider") & (df["Gider Türü"]=="İstek")]["Tutar"].sum()
 
     st.metric("Toplam Gelir", f"{toplam_gelir:.2f} ₺")
     st.metric("Toplam Gider", f"{toplam_gider:.2f} ₺")
     st.metric("Kalan Bakiye", f"{bakiye:.2f} ₺")
 
     st.write("İhtiyaç ve İstek Gider Dağılımı:")
-    gider_turleri = {"İhtiyaç": ihtiyac_gider, "İstek": istek_gider}
+    gider_turleri = {"İhtiyaç": İhtiyaç_gider, "İstek": İstek_gider}
 
     if toplam_gider > 0:
         plt.figure(figsize=(5,5))
